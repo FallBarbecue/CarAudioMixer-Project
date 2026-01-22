@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarAudioMixer AI | Master Edition</title>
+    <style>
+        /* --- CSS: TASARIM --- */
+        body {
+            background-color: #0d0d0d;
+            color: #00ffcc;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 10px;
+            user-select: none;
+        }
+
+        h1 { margin: 10px 0; font-size: 1.5rem; letter-spacing: 2px; text-shadow: 0 0 10px rgba(0,255,204,0.5); }
+        
+        .container {
+            width: 100%;
+            max-width: 450px;
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            border: 1px solid #333;
+        }
+
+        /* GİRİŞ VE AYARLAR */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+        .settings-group { display: flex; flex-direction: column; }
+        .settings-group label { font-size: 0.75rem; color: #888; margin-bottom: 2px; }
+        
+        input, select {
+            background: #2a2a2a; border: 1px solid #444; color: white;
+            padding: 5px; border-radius: 4px; width: 100%; box-sizing: border-box;
+        }
+        
+        button {
+            width: 100%; background: #00ffcc; color: #000; border: none;
+            padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer;
+            margin-top: 10px; text-transform: uppercase;
+        }
+        button:disabled { background: #444; color: #888; cursor: not-allowed; }
+
+        /* MİKSER ARAYÜZÜ */
+        #mixer-interface { display: none; flex-direction: column; gap: 15px; }
+
+        /* PROGRESS BAR */
+        .timeline-container {
+            width: 100%; text-align: center;
+        }
+        #timeDisplay { font-family: monospace; color: #aaa; font-size: 0.9rem; margin-bottom: 5px; display: block;}
+        input[type=range].progress-slider {
+            width: 100%; accent-color: #00ffcc; height: 4px; cursor: pointer;
+        }
+
+        /* 2D PAD (KARE ALAN) */
+        .pad-wrapper {
+            position: relative; width: 260px; height: 260px; margin: 0 auto;
+            background: radial-gradient(circle at center, #222 0%, #000 100%);
+            border: 2px solid #333; border-radius: 8px;
+            touch-action: none;
+        }
+        .grid-line { position: absolute; background: #00ffcc; opacity: 0.15; pointer-events: none; }
+        .puck {
+            width: 24px; height: 24px; background: #00ffcc; border-radius: 50%;
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px #00ffcc; cursor: grab; z-index: 10;
+        }
+        .label { position: absolute; color: #444; font-size: 10px; font-weight: bold; pointer-events: none; }
+
+        /* KANALLAR */
+        .channels-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+        }
+        .channel-card {
+            background: #222; padding: 10px; border-radius: 6px;
+            border: 1px solid transparent; cursor: pointer; text-align: center;
+        }
+        .channel-card.active {
+            border-color: #00ffcc; background: #112a25;
+        }
+        /* ALL KARTI ÖZEL STİL */
+        .channel-card.master-card {
+            grid-column: span 2; /* Tüm satırı kapla */
+            background: #2a1a1a;
+            border-color: #ff5722;
+        }
+        .channel-card.master-card.active {
+            background: #3d1a1a;
+            box-shadow: 0 0 10px rgba(255, 87, 34, 0.3);
+        }
+
+        .channel-name { display: block; font-size: 0.8rem; font-weight: bold; color: #ccc; margin-bottom: 5px; }
+        
+        /* Volume Slider */
+        input[type=range].vol-slider {
+            width: 100%; height: 4px; accent-color: #ff5722;
+        }
+
+        #statusText { font-family: monospace; color: #ffd700; margin-top: 10px; font-size: 0.85rem; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <h1>CAR AUDIO MIXER <span style="font-size:0.6em; color:#555">MASTER</span></h1>
+
+    <div class="container">
+        
+        <div id="setup-panel">
+            <div class="settings-grid">
+                <div class="settings-group">
+                    <label>Sunucu Adresi (Ngrok/Local)</label>
+                    <input type="text" id="serverUrl" value="http://localhost:5000/" placeholder="https://....ngrok-free.app">
+                </div>
+                <div class="settings-group">
+                    <label>AI Modeli</label>
+                    <select id="modelSelect">
+                        <option value="htdemucs_6s">6 Kanal (htdemucs_6s)</option>
+                        <option value="htdemucs">4 Kanal (htdemucs)</option>
+                        <option value="mdx_extra_q">Yüksek Kalite (mdx_q)</option>
+                    </select>
+                </div>
+                <div class="settings-group">
+                    <label>Shifts (Hassasiyet)</label>
+                    <input type="range" min="1" max="10" value="1" id="shiftInput">
+                </div>
+                <div class="settings-group">
+                    <label>Overlap (Örtüşme)</label>
+                    <input type="range" min="1" max="9" value="2" id="overlapInput">
+                </div>
+            </div>
+
+            <div style="border: 2px dashed #333; padding: 15px; text-align: center; border-radius: 8px;">
+                <input type="file" id="fileInput" accept="audio/*" style="display:none" onchange="document.getElementById('fileName').innerText = this.files[0].name">
+                <button onclick="document.getElementById('fileInput').click()" style="background:#333; color:white; margin-top:0;">DOSYA SEÇ</button>
+                <div id="fileName" style="font-size:0.8em; color:#aaa; margin-top:5px;">Seçilmedi</div>
+            </div>
+
+            <button onclick="startProcess()" id="btnProcess">ANALİZ ET VE YÜKLE</button>
+            <div id="statusText">Sistem Hazır.</div>
+        </div>
+
+        <div id="mixer-interface">
+            
+            <div class="timeline-container">
+                <span id="timeDisplay">00:00 / 00:00</span>
+                <input type="range" class="progress-slider" id="progressBar" value="0" step="0.1" min="0" oninput="handleSeek(this.value)" onmousedown="isSeeking=true" onmouseup="isSeeking=false">
+            </div>
+
+            <div style="display: flex; gap:10px;">
+                <button onclick="togglePlayback()" id="playBtn">OYNAT</button>
+                <button onclick="resetCurrentChannel()" style="background:#ff5722; color:white;">SIFIRLA (KANAL)</button>
+            </div>
+
+            <div style="text-align:center; color:#00ffcc; font-weight:bold; font-size:0.9rem;" id="activeChannelName">
+                SEÇİLİ: ALL (MASTER)
+            </div>
+
+            <div class="pad-wrapper" id="pad">
+                <div class="grid-line" style="width:1px; height:100%; left:50%;"></div>
+                <div class="grid-line" style="width:100%; height:1px; top:50%;"></div>
+                <span class="label" style="top:5px; left:50%; transform:translateX(-50%)">ÖN (FRONT)</span>
+                <span class="label" style="bottom:5px; left:50%; transform:translateX(-50%)">ARKA (REAR)</span>
+                <span class="label" style="top:50%; left:5px; transform:translateY(-50%)">SOL</span>
+                <span class="label" style="top:50%; right:5px; transform:translateY(-50%)">SAĞ</span>
+                
+                <div class="puck" id="puck"></div>
+            </div>
+
+            <div class="channels-grid" id="channelList">
+                </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- GLOBAL DEĞİŞKENLER ---
+        let audioContext;
+        let masterDuration = 0;
+        let startTime = 0;
+        let pausedAt = 0;
+        let isPlaying = false;
+        let isSeeking = false;
+        
+        // Kanal Verileri
+        // channels[0] her zaman "ALL" (Master) olacak.
+        let channels = []; 
+        let currentChannelIndex = 0;
+        let stems = ['vocals', 'drums', 'bass', 'guitar', 'piano', 'other'];
+        
+        let animationFrame;
+
+        // --- 1. SÜREÇ BAŞLATMA ---
+        async function startProcess() {
+            const fileInput = document.getElementById('fileInput');
+            let BASE_URL = document.getElementById('serverUrl').value.trim();
+            if (!BASE_URL.endsWith('/')) BASE_URL += '/';
+
+            if (!fileInput.files[0]) { alert("Dosya seçmelisin!"); return; }
+
+            document.getElementById('btnProcess').disabled = true;
+            document.getElementById('statusText').innerText = "Yükleniyor...";
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('model', document.getElementById('modelSelect').value);
+            formData.append('shifts', document.getElementById('shiftInput').value);
+            formData.append('overlap', '0.' + document.getElementById('overlapInput').value);
+
+            let progressInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(BASE_URL + 'progress');
+                    const data = await res.json();
+                    let clean = data.progress.replace(/\u001b\[.*?m/g, '').replace(/[|█]/g, '').trim();
+                    document.getElementById('statusText').innerText = clean;
+                } catch(e) {}
+            }, 1000);
+
+            try {
+                const response = await fetch(BASE_URL + 'process', { method: 'POST', body: formData });
+                const result = await response.json();
+                clearInterval(progressInterval);
+
+                if (result.status === 'success') {
+                    document.getElementById('statusText').innerText = "Ses Motoru Kuruluyor...";
+                    await initAudioEngine(BASE_URL, result.song_name);
+                } else {
+                    throw new Error(result.error || "Sunucu hatası");
+                }
+            } catch (error) {
+                clearInterval(progressInterval);
+                document.getElementById('statusText').innerText = "Hata: " + error.message;
+                document.getElementById('btnProcess').disabled = false;
+            }
+        }
+
+        // --- 2. SES MOTORU & BUFFER YÜKLEME ---
+        async function initAudioEngine(baseUrl, songName) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            channels = [];
+            
+            // --- 1. ÖNCE "ALL" (MASTER) KANALINI EKLE ---
+            // Bu sanal bir kanaldır, ses dosyası içermez, sadece diğerlerini yönetir.
+            channels.push({
+                name: "ALL (MASTER)",
+                isMaster: true,
+                buffer: null, 
+                source: null,
+                volumeGain: null,
+                volume: 1.0,
+                x: 0, y: 0
+            });
+
+            // --- 2. DİĞER KANALLARI İNDİR ---
+            for (let i = 0; i < stems.length; i++) {
+                let stemName = stems[i];
+                try {
+                    const res = await fetch(`${baseUrl}download/${songName}/${stemName}`);
+                    const arrayBuffer = await res.arrayBuffer();
+                    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                    
+                    if (masterDuration === 0) masterDuration = audioBuffer.duration;
+
+                    channels.push({
+                        name: stemName,
+                        isMaster: false,
+                        buffer: audioBuffer,
+                        source: null,
+                        volumeGain: null,
+                        gainL: null,
+                        gainR: null,
+                        volume: 1.0,
+                        x: 0,
+                        y: 0
+                    });
+                } catch (e) { console.log("Kanal yok: " + stemName); }
+            }
+
+            setupUI();
+            
+            document.getElementById('setup-panel').style.display = 'none';
+            document.getElementById('mixer-interface').style.display = 'flex';
+            document.getElementById('progressBar').max = masterDuration;
+            
+            // Başlangıçta "ALL" kanalını seç
+            selectChannel(0);
+        }
+
+        // --- 3. OYNATMA MANTIĞI ---
+        function playAudio(offsetTime) {
+            stopAudio();
+            startTime = audioContext.currentTime - offsetTime;
+
+            channels.forEach(ch => {
+                if (ch.isMaster) return; // Master kanalın sesi yoktur, atla
+
+                ch.source = audioContext.createBufferSource();
+                ch.source.buffer = ch.buffer;
+
+                ch.volumeGain = audioContext.createGain();
+                ch.volumeGain.gain.value = ch.volume; 
+
+                ch.gainL = audioContext.createGain();
+                ch.gainR = audioContext.createGain();
+
+                const splitter = audioContext.createChannelSplitter(2);
+                const merger = audioContext.createChannelMerger(2);
+
+                ch.source.connect(ch.volumeGain);
+                ch.volumeGain.connect(splitter);
+
+                splitter.connect(ch.gainL, 0); 
+                ch.gainL.connect(merger, 0, 0);
+
+                let rightInputIndex = (ch.buffer.numberOfChannels > 1) ? 1 : 0;
+                splitter.connect(ch.gainR, rightInputIndex);
+                ch.gainR.connect(merger, 0, 1);
+
+                merger.connect(audioContext.destination);
+
+                applySpatialPhysics(ch);
+                ch.source.start(0, offsetTime);
+            });
+
+            isPlaying = true;
+            document.getElementById('playBtn').innerText = "DURDUR";
+            document.getElementById('playBtn').style.background = "#ff5722";
+            
+            cancelAnimationFrame(animationFrame);
+            updateProgressLoop();
+        }
+
+        function stopAudio() {
+            channels.forEach(ch => {
+                if (ch.source) {
+                    try { ch.source.stop(); } catch(e){}
+                    ch.source = null;
+                }
+            });
+            isPlaying = false;
+            document.getElementById('playBtn').innerText = "OYNAT";
+            document.getElementById('playBtn').style.background = "#00ffcc";
+            cancelAnimationFrame(animationFrame);
+        }
+
+        function togglePlayback() {
+            if (audioContext.state === 'suspended') audioContext.resume();
+            if (isPlaying) {
+                pausedAt = audioContext.currentTime - startTime;
+                stopAudio();
+            } else {
+                if (pausedAt >= masterDuration) pausedAt = 0;
+                playAudio(pausedAt);
+            }
+        }
+
+        function handleSeek(val) {
+            pausedAt = parseFloat(val);
+            document.getElementById('timeDisplay').innerText = formatTime(pausedAt) + " / " + formatTime(masterDuration);
+            if (isPlaying) playAudio(pausedAt);
+        }
+
+        function updateProgressLoop() {
+            if (!isPlaying || isSeeking) return;
+            let current = audioContext.currentTime - startTime;
+            if (current >= masterDuration) {
+                stopAudio();
+                pausedAt = 0;
+                document.getElementById('progressBar').value = 0;
+                return;
+            }
+            document.getElementById('progressBar').value = current;
+            document.getElementById('timeDisplay').innerText = formatTime(current) + " / " + formatTime(masterDuration);
+            animationFrame = requestAnimationFrame(updateProgressLoop);
+        }
+
+        // --- 4. KANAL VE UI YÖNETİMİ ---
+        function setupUI() {
+            const list = document.getElementById('channelList');
+            list.innerHTML = '';
+
+            channels.forEach((ch, index) => {
+                const div = document.createElement('div');
+                div.className = 'channel-card';
+                if(ch.isMaster) div.classList.add('master-card'); // Özel Stil
+                
+                div.id = `card-${index}`;
+                div.onclick = (e) => {
+                    if (e.target.type !== 'range') selectChannel(index);
+                };
+                
+                div.innerHTML = `
+                    <span class="channel-name">${ch.name.toUpperCase()}</span>
+                    <input type="range" class="vol-slider" min="0" max="1" step="0.01" value="${ch.volume}" 
+                           oninput="updateChannelVolume(${index}, this.value)">
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function selectChannel(index) {
+            currentChannelIndex = index;
+            document.querySelectorAll('.channel-card').forEach((el, idx) => {
+                if (idx === index) el.classList.add('active');
+                else el.classList.remove('active');
+            });
+            const name = channels[index].name.toUpperCase();
+            document.getElementById('activeChannelName').innerText = "SEÇİLİ: " + name;
+            
+            // Topu o kanalın konumuna götür
+            updatePuckVisual(channels[index].x, channels[index].y);
+        }
+
+        // --- MASTER VOLUME LOGIC ---
+        function updateChannelVolume(index, val) {
+            const floatVal = parseFloat(val);
+            
+            if (channels[index].isMaster) {
+                // EĞER ALL (MASTER) KARTI OYNANDIYSA HERKESİ DEĞİŞTİR
+                channels.forEach((ch, i) => {
+                    ch.volume = floatVal; // Veriyi güncelle
+                    // UI Slider'ı da güncelle
+                    const slider = document.querySelector(`#card-${i} input`);
+                    if(slider) slider.value = floatVal;
+                    
+                    // Sesi güncelle
+                    if (ch.volumeGain) ch.volumeGain.gain.value = floatVal;
+                });
+            } else {
+                // Tekil kanal değişimi
+                channels[index].volume = floatVal;
+                if (channels[index].volumeGain) {
+                    channels[index].volumeGain.gain.value = floatVal;
+                }
+            }
+        }
+
+        // --- 5. FİZİK VE DOKUNMATİK ---
+        function applySpatialPhysics(ch) {
+            if (!ch.gainL || !ch.gainR) return;
+
+            let x = ch.x; 
+            let y = ch.y; 
+
+            // Mesafe Algoritması
+            let distanceFactor;
+            if (y >= 0) distanceFactor = 0.70 + (y * 0.30);
+            else distanceFactor = 0.70 + (y * 0.50);
+            if (distanceFactor < 0.1) distanceFactor = 0.1;
+
+            let leftVal = distanceFactor;
+            let rightVal = distanceFactor;
+
+            if (x > 0) leftVal *= (1 - (x * 0.8));
+            else if (x < 0) rightVal *= (1 - (Math.abs(x) * 0.8));
+
+            ch.gainL.gain.value = leftVal;
+            ch.gainR.gain.value = rightVal;
+        }
+
+        // --- PUCK HAREKETİ (MASTER LOGIC EKLİ) ---
+        const pad = document.getElementById('pad');
+        const puck = document.getElementById('puck');
+        let isDragging = false;
+
+        function updatePuckVisual(normX, normY) {
+            const w = pad.clientWidth;
+            const h = pad.clientHeight;
+            let px = ((normX + 1) / 2) * w;
+            let py = ((-normY + 1) / 2) * h;
+            puck.style.left = px + 'px';
+            puck.style.top = py + 'px';
+        }
+
+        function handleMove(clientX, clientY) {
+            const rect = pad.getBoundingClientRect();
+            let x = clientX - rect.left;
+            let y = clientY - rect.top;
+
+            if (x < 0) x = 0; if (x > rect.width) x = rect.width;
+            if (y < 0) y = 0; if (y > rect.height) y = rect.height;
+
+            let normX = (x / rect.width) * 2 - 1;
+            let normY = -((y / rect.height) * 2 - 1);
+
+            // GÖRSELİ GÜNCELLE
+            puck.style.left = x + 'px';
+            puck.style.top = y + 'px';
+
+            // --- MASTER LOGIC ---
+            let currentCh = channels[currentChannelIndex];
+            
+            if (currentCh.isMaster) {
+                // EĞER "ALL" SEÇİLİYSE, HERKESİ AYNI KONUMA IŞINLA
+                channels.forEach(ch => {
+                    ch.x = normX;
+                    ch.y = normY;
+                    applySpatialPhysics(ch);
+                });
+            } else {
+                // SADECE SEÇİLİ KANALI GÜNCELLE
+                currentCh.x = normX;
+                currentCh.y = normY;
+                applySpatialPhysics(currentCh);
+            }
+        }
+
+        pad.addEventListener('mousedown', () => isDragging = true);
+        window.addEventListener('mouseup', () => isDragging = false);
+        pad.addEventListener('mousemove', (e) => { if (isDragging) handleMove(e.clientX, e.clientY); });
+        
+        pad.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            handleMove(e.touches[0].clientX, e.touches[0].clientY);
+            e.preventDefault();
+        }, {passive:false});
+        pad.addEventListener('touchmove', (e) => {
+            if (isDragging) handleMove(e.touches[0].clientX, e.touches[0].clientY);
+            e.preventDefault();
+        }, {passive:false});
+        pad.addEventListener('touchend', () => isDragging = false);
+
+        function resetCurrentChannel() {
+            let ch = channels[currentChannelIndex];
+            if (ch.isMaster) {
+                // Master sıfırlanırsa herkes merkeze döner
+                channels.forEach(c => {
+                    c.x = 0; c.y = 0;
+                    applySpatialPhysics(c);
+                });
+            } else {
+                ch.x = 0; ch.y = 0;
+                applySpatialPhysics(ch);
+            }
+            updatePuckVisual(0,0);
+        }
+
+        function formatTime(seconds) {
+            let m = Math.floor(seconds / 60);
+            let s = Math.floor(seconds % 60);
+            if(s < 10) s = '0' + s;
+            return m + ':' + s;
+        }
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarAudioMixer AI</title>
+    <style>
+        /* --- GLOBAL CSS --- */
+        body {
+            background-color: #050505;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Navbar */
+        nav {
+            background: #111;
+            border-bottom: 1px solid #333;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        nav .brand { color: #00ffcc; font-weight: bold; font-size: 1.2rem; text-decoration: none; letter-spacing: 2px; }
+        nav .links a { color: #aaa; text-decoration: none; margin-left: 20px; font-size: 0.9rem; transition: 0.3s; }
+        nav .links a:hover { color: #fff; }
+        nav .links a.active { color: #00ffcc; }
+
+        /* Main Content */
+        .container {
+            flex: 1;
+            padding: 40px 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Card */
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+
+        /* Forms */
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0 20px 0;
+            background: #252525;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        input:focus { outline: none; border-color: #00ffcc; }
+
+        button.btn-primary {
+            background: #00ffcc;
+            color: #000;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            text-transform: uppercase;
+            transition: 0.3s;
+        }
+        button.btn-primary:hover { background: #fff; box-shadow: 0 0 15px #00ffcc; }
+
+        /* Flash Messages */
+        .alert {
+            padding: 15px;
+            background: #ff5722;
+            color: white;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        h2 { margin-top: 0; color: #00ffcc; }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <a href="/" class="brand">AUDIO AI</a>
+        <div class="links">
+            {% if current_user.is_authenticated %}
+                <a href="{{ url_for('dashboard') }}">LIBRARY</a>
+                <a href="{{ url_for('logout') }}" style="color:#ff5722;">LOGOUT</a>
+            {% else %}
+                <a href="{{ url_for('login') }}">LOGIN</a>
+                <a href="{{ url_for('register') }}">REGISTER</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+</body>
+</html>

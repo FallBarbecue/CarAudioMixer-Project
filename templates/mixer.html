@@ -1,0 +1,473 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+    .mixer-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+    }
+
+    .back-link {
+        align-self: flex-start;
+        margin-bottom: 20px;
+        color: #888;
+        text-decoration: none;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        transition: 0.3s;
+    }
+    .back-link:hover { color: #00ffcc; padding-left: 5px; }
+
+    .setup-box {
+        background: #151515;
+        border: 1px solid #333;
+        padding: 25px;
+        border-radius: 10px;
+        width: 100%;
+        max-width: 500px;
+    }
+
+    .settings-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    
+    label { font-size: 0.8rem; color: #aaa; display: block; margin-bottom: 5px; }
+    select, input[type=range] { width: 100%; background: #222; border: 1px solid #444; color: white; padding: 5px; border-radius: 4px; }
+
+    #mixer-interface { display: none; width: 100%; max-width: 600px; flex-direction: column; gap: 20px; }
+
+    .timeline-container { width: 100%; text-align: center; background: #111; padding: 10px; border-radius: 8px; border: 1px solid #333; }
+    #timeDisplay { font-family: monospace; color: #00ffcc; margin-bottom: 5px; display: block; font-size: 1.1em; }
+    input[type=range].progress-slider { width: 100%; height: 6px; accent-color: #00ffcc; cursor: pointer; }
+
+    .pad-wrapper {
+        position: relative; width: 100%; max-width: 300px; height: 300px; margin: 0 auto;
+        background: radial-gradient(circle at center, #222 0%, #000 100%);
+        border: 2px solid #333; border-radius: 12px;
+        touch-action: none;
+        box-shadow: inset 0 0 30px rgba(0,0,0,0.8);
+    }
+    .grid-line { position: absolute; background: #00ffcc; opacity: 0.15; pointer-events: none; }
+    .label-pad { position: absolute; color: #444; font-size: 10px; font-weight: bold; pointer-events: none; text-transform: uppercase; }
+    
+    .puck {
+        width: 28px; height: 28px; background: #00ffcc; border-radius: 50%;
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 0 20px #00ffcc; cursor: grab; z-index: 100;
+        border: 2px solid #fff;
+    }
+    .puck:active { cursor: grabbing; background: #fff; }
+
+    .channels-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    
+    .channel-card {
+        background: #1a1a1a; padding: 15px; border-radius: 8px;
+        border: 1px solid transparent; cursor: pointer; text-align: center;
+        transition: 0.2s;
+    }
+    .channel-card:hover { background: #222; }
+    .channel-card.active { border-color: #00ffcc; background: #112a25; box-shadow: 0 0 10px rgba(0, 255, 204, 0.1); }
+    
+    .channel-card.master-card { grid-column: span 2; background: #2a1a1a; border-color: #ff5722; }
+    .channel-card.master-card.active { background: #3d1a1a; box-shadow: 0 0 15px rgba(255, 87, 34, 0.2); }
+
+    .channel-name { display: block; font-size: 0.85rem; font-weight: bold; color: #ccc; margin-bottom: 8px; letter-spacing: 1px; }
+    input[type=range].vol-slider { width: 100%; height: 4px; accent-color: #ff5722; }
+
+    .control-row { display: flex; gap: 10px; }
+    .btn-ctrl { flex: 1; padding: 12px; border: none; font-weight: bold; border-radius: 6px; cursor: pointer; text-transform: uppercase; }
+    .btn-play { background: #00ffcc; color: #000; }
+    .btn-reset { background: #333; color: #fff; border: 1px solid #444; }
+    .btn-reset:hover { border-color: #ff5722; color: #ff5722; }
+
+    #statusText { margin-top: 15px; color: #ffd700; font-family: monospace; text-align: center; }
+    #activeChannelDisplay { text-align: center; color: #00ffcc; font-weight: bold; margin-bottom: 10px; text-shadow: 0 0 5px rgba(0,255,204,0.5); }
+</style>
+
+<a href="{{ url_for('dashboard') }}" class="back-link">← BACK TO LIBRARY</a>
+
+<div class="mixer-container">
+
+    <div id="setup-panel" class="setup-box">
+        <h2 style="margin-top:0; text-align:center; color:#fff;">NEW PROJECT</h2>
+        
+        <div class="settings-grid">
+            <div>
+                <label>AI Model</label>
+                <select id="modelSelect">
+                    <option value="htdemucs_6s">6 Stems (htdemucs_6s)</option>
+                    <option value="htdemucs">4 Stems (htdemucs)</option>
+                    <option value="mdx_extra_q">High Quality (mdx_q)</option>
+                </select>
+            </div>
+            <div>
+                <label>Shifts (Precision)</label>
+                <input type="range" min="1" max="10" value="1" id="shiftInput">
+            </div>
+        </div>
+
+        <div style="border: 2px dashed #333; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 15px; cursor: pointer;" 
+             onclick="document.getElementById('fileInput').click()">
+            <span style="font-size: 2rem; color: #555;">📂</span>
+            <p style="color:#aaa; margin:5px 0;">Select or Drop File</p>
+            <input type="file" id="fileInput" accept="audio/*" style="display:none" onchange="document.getElementById('fileName').innerText = this.files[0].name">
+            <div id="fileName" style="font-size:0.8em; color:#00ffcc; margin-top:5px;"></div>
+        </div>
+
+        <button onclick="uploadAndProcess()" class="btn-primary" id="btnProcess">START ANALYSIS</button>
+        <div id="statusText">System Ready.</div>
+    </div>
+
+    <div id="mixer-interface">
+        
+        <div class="timeline-container">
+            <span id="timeDisplay">00:00 / 00:00</span>
+            <input type="range" class="progress-slider" id="progressBar" value="0" step="0.1" min="0" 
+                   oninput="handleSeek(this.value)" onmousedown="isSeeking=true" onmouseup="isSeeking=false">
+        </div>
+
+        <div id="activeChannelDisplay">SELECTED: ALL (MASTER)</div>
+
+        <div class="pad-wrapper" id="pad">
+            <div class="grid-line" style="width:1px; height:100%; left:50%;"></div>
+            <div class="grid-line" style="width:100%; height:1px; top:50%;"></div>
+            
+            <span class="label-pad" style="top:10px; left:50%; transform:translateX(-50%)">FRONT</span>
+            <span class="label-pad" style="bottom:10px; left:50%; transform:translateX(-50%)">REAR</span>
+            <span class="label-pad" style="top:50%; left:10px; transform:translateY(-50%)">LEFT</span>
+            <span class="label-pad" style="top:50%; right:10px; transform:translateY(-50%)">RIGHT</span>
+            
+            <div class="puck" id="puck"></div>
+        </div>
+
+        <div class="control-row">
+            <button onclick="togglePlayback()" id="playBtn" class="btn-ctrl btn-play">PLAY</button>
+            <button onclick="resetChannel()" class="btn-ctrl btn-reset">RESET</button>
+        </div>
+
+        <div class="channels-grid" id="channelList">
+            </div>
+
+    </div>
+</div>
+
+<script>
+    /* --- XIAO AUDIO ENGINE --- */
+    
+    let audioContext;
+    let masterDuration = 0;
+    let startTime = 0;
+    let pausedAt = 0;
+    let isPlaying = false;
+    let isSeeking = false;
+    let animationFrame;
+    
+    let channels = []; 
+    let currentChannelIndex = 0;
+    let stems = ['vocals', 'drums', 'bass', 'guitar', 'piano', 'other'];
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const songToLoad = urlParams.get('load');
+
+        if (songToLoad) {
+            console.log("Loading Project:", songToLoad);
+            document.getElementById('setup-panel').style.display = 'none';
+            document.getElementById('mixer-interface').style.display = 'flex';
+            document.getElementById('activeChannelDisplay').innerText = "LOADING PROJECT: " + songToLoad;
+            initAudioEngine(songToLoad);
+        }
+    });
+
+    async function uploadAndProcess() {
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files[0]) { alert("Please select a file!"); return; }
+
+        document.getElementById('btnProcess').disabled = true;
+        document.getElementById('statusText').innerText = "Uploading to server...";
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('model', document.getElementById('modelSelect').value);
+        formData.append('shifts', document.getElementById('shiftInput').value);
+        formData.append('overlap', 0.25); 
+
+        let progressInterval = setInterval(async () => {
+            try {
+                const res = await fetch('/progress');
+                const data = await res.json();
+                let clean = data.progress.replace(/\u001b\[.*?m/g, '').replace(/[|█]/g, '').trim();
+                document.getElementById('statusText').innerText = clean;
+            } catch(e) {}
+        }, 1000);
+
+        try {
+            const response = await fetch('/process', { method: 'POST', body: formData });
+            const result = await response.json();
+            clearInterval(progressInterval);
+
+            if (result.status === 'success') {
+                document.getElementById('statusText').innerText = "Initializing Audio Engine...";
+                document.getElementById('setup-panel').style.display = 'none';
+                document.getElementById('mixer-interface').style.display = 'flex';
+                await initAudioEngine(result.song_name);
+            } else {
+                alert("Error: " + result.error);
+                document.getElementById('btnProcess').disabled = false;
+            }
+        } catch (error) {
+            clearInterval(progressInterval);
+            alert("Connection Error");
+            document.getElementById('btnProcess').disabled = false;
+        }
+    }
+
+    async function initAudioEngine(songName) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        channels = [];
+        
+        channels.push({
+            name: "ALL (MASTER)", isMaster: true,
+            buffer: null, source: null, volumeGain: null,
+            volume: 1.0, x: 0, y: 0
+        });
+
+        for (let i = 0; i < stems.length; i++) {
+            let stemName = stems[i];
+            try {
+                const res = await fetch(`/download/${songName}/${stemName}`);
+                if(!res.ok) continue; 
+                
+                const arrayBuffer = await res.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                if (masterDuration === 0) masterDuration = audioBuffer.duration;
+
+                channels.push({
+                    name: stemName, isMaster: false,
+                    buffer: audioBuffer,
+                    source: null, volumeGain: null, gainL: null, gainR: null,
+                    volume: 1.0, x: 0, y: 0
+                });
+            } catch (e) { console.log("Missing stem:", stemName); }
+        }
+
+        setupUI();
+        document.getElementById('progressBar').max = masterDuration;
+        selectChannel(0);
+    }
+
+    function playAudio(offsetTime) {
+        channels.forEach(ch => { if(ch.source) { try{ch.source.stop();}catch(e){} ch.source=null; } });
+        
+        startTime = audioContext.currentTime - offsetTime;
+
+        channels.forEach(ch => {
+            if (ch.isMaster) return;
+
+            ch.source = audioContext.createBufferSource();
+            ch.source.buffer = ch.buffer;
+
+            ch.volumeGain = audioContext.createGain();
+            ch.volumeGain.gain.value = ch.volume;
+
+            ch.gainL = audioContext.createGain();
+            ch.gainR = audioContext.createGain();
+
+            const splitter = audioContext.createChannelSplitter(2);
+            const merger = audioContext.createChannelMerger(2);
+
+            ch.source.connect(ch.volumeGain);
+            ch.volumeGain.connect(splitter);
+            
+            splitter.connect(ch.gainL, 0);
+            ch.gainL.connect(merger, 0, 0);
+
+            let rightIdx = (ch.buffer.numberOfChannels > 1) ? 1 : 0;
+            splitter.connect(ch.gainR, rightIdx);
+            ch.gainR.connect(merger, 0, 1);
+
+            merger.connect(audioContext.destination);
+
+            applyPhysics(ch); 
+            ch.source.start(0, offsetTime);
+        });
+
+        isPlaying = true;
+        document.getElementById('playBtn').innerText = "PAUSE";
+        document.getElementById('playBtn').style.background = "#ff5722"; 
+        
+        cancelAnimationFrame(animationFrame);
+        updateProgressLoop();
+    }
+
+    function togglePlayback() {
+        if(!audioContext) return;
+        if (audioContext.state === 'suspended') audioContext.resume();
+
+        if (isPlaying) {
+            pausedAt = audioContext.currentTime - startTime;
+            channels.forEach(ch => { if(ch.source) { try{ch.source.stop();}catch(e){} ch.source=null; } });
+            isPlaying = false;
+            document.getElementById('playBtn').innerText = "PLAY";
+            document.getElementById('playBtn').style.background = "#00ffcc";
+            cancelAnimationFrame(animationFrame);
+        } else {
+            if (pausedAt >= masterDuration) pausedAt = 0;
+            playAudio(pausedAt);
+        }
+    }
+
+    function handleSeek(val) {
+        pausedAt = parseFloat(val);
+        document.getElementById('timeDisplay').innerText = formatTime(pausedAt) + " / " + formatTime(masterDuration);
+        if (isPlaying) playAudio(pausedAt);
+    }
+
+    function updateProgressLoop() {
+        if (!isPlaying || isSeeking) return;
+        let current = audioContext.currentTime - startTime;
+        if (current >= masterDuration) {
+            togglePlayback();
+            pausedAt = 0;
+            document.getElementById('progressBar').value = 0;
+            return;
+        }
+        document.getElementById('progressBar').value = current;
+        document.getElementById('timeDisplay').innerText = formatTime(current) + " / " + formatTime(masterDuration);
+        animationFrame = requestAnimationFrame(updateProgressLoop);
+    }
+
+    function setupUI() {
+        const list = document.getElementById('channelList');
+        list.innerHTML = '';
+
+        channels.forEach((ch, index) => {
+            const div = document.createElement('div');
+            div.className = 'channel-card';
+            if(ch.isMaster) div.classList.add('master-card');
+            div.id = `card-${index}`;
+            div.onclick = (e) => { if (e.target.type !== 'range') selectChannel(index); };
+
+            div.innerHTML = `
+                <span class="channel-name">${ch.name.toUpperCase()}</span>
+                <input type="range" class="vol-slider" min="0" max="1" step="0.01" value="${ch.volume}" 
+                       oninput="updateVolume(${index}, this.value)">
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    function selectChannel(index) {
+        currentChannelIndex = index;
+        document.querySelectorAll('.channel-card').forEach((el, idx) => {
+            if(idx === index) el.classList.add('active');
+            else el.classList.remove('active');
+        });
+        
+        const name = channels[index].name.toUpperCase();
+        document.getElementById('activeChannelDisplay').innerText = "SELECTED: " + name;
+        
+        updatePuckVisual(channels[index].x, channels[index].y);
+    }
+
+    function updateVolume(index, val) {
+        const v = parseFloat(val);
+        const ch = channels[index];
+
+        if (ch.isMaster) {
+            channels.forEach((c, i) => {
+                c.volume = v;
+                const slider = document.querySelector(`#card-${i} input`);
+                if(slider) slider.value = v;
+                if(c.volumeGain) c.volumeGain.gain.value = v;
+            });
+        } else {
+            ch.volume = v;
+            if(ch.volumeGain) ch.volumeGain.gain.value = v;
+        }
+    }
+
+    function applyPhysics(ch) {
+        if(!ch.gainL || !ch.gainR) return;
+        
+        let x = ch.x; let y = ch.y;
+        
+        let dist = (y >= 0) ? (0.7 + y*0.3) : (0.7 + y*0.5);
+        if(dist < 0.1) dist = 0.1;
+
+        let l = dist, r = dist;
+        if(x > 0) l *= (1 - x*0.8);
+        else if(x < 0) r *= (1 - Math.abs(x)*0.8);
+
+        ch.gainL.gain.value = l;
+        ch.gainR.gain.value = r;
+    }
+
+    const pad = document.getElementById('pad');
+    const puck = document.getElementById('puck');
+    let isDragging = false;
+
+    function updatePuckVisual(nx, ny) {
+        const w = pad.clientWidth; const h = pad.clientHeight;
+        puck.style.left = (((nx+1)/2)*w) + 'px';
+        puck.style.top = (((-ny+1)/2)*h) + 'px';
+    }
+
+    function handleMove(cx, cy) {
+        const rect = pad.getBoundingClientRect();
+        let px = cx - rect.left; let py = cy - rect.top;
+        
+        if(px < 0) px=0; if(px > rect.width) px=rect.width;
+        if(py < 0) py=0; if(py > rect.height) py=rect.height;
+
+        puck.style.left = px + 'px';
+        puck.style.top = py + 'px';
+
+        let nx = (px/rect.width)*2 - 1;
+        let ny = -((py/rect.height)*2 - 1);
+
+        const currentCh = channels[currentChannelIndex];
+        
+        if (currentCh.isMaster) {
+            channels.forEach(c => {
+                c.x = nx; c.y = ny;
+                applyPhysics(c);
+            });
+        } else {
+            currentCh.x = nx; currentCh.y = ny;
+            applyPhysics(currentCh);
+        }
+    }
+
+    pad.addEventListener('mousedown', () => isDragging = true);
+    window.addEventListener('mouseup', () => isDragging = false);
+    pad.addEventListener('mousemove', (e) => { if(isDragging) handleMove(e.clientX, e.clientY); });
+    
+    pad.addEventListener('touchstart', (e) => { isDragging=true; handleMove(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }, {passive:false});
+    pad.addEventListener('touchmove', (e) => { if(isDragging) handleMove(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }, {passive:false});
+    pad.addEventListener('touchend', () => isDragging = false);
+
+    function resetChannel() {
+        const c = channels[currentChannelIndex];
+        if(c.isMaster) channels.forEach(ch=>{ ch.x=0; ch.y=0; applyPhysics(ch); });
+        else { c.x=0; c.y=0; applyPhysics(c); }
+        updatePuckVisual(0,0);
+    }
+
+    function formatTime(s) {
+        let m = Math.floor(s/60); let sec = Math.floor(s%60);
+        return m + ':' + (sec<10?'0':'') + sec;
+    }
+</script>
+
+{% endblock %}

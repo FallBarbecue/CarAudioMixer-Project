@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card" style="max-width: 400px; margin: 0 auto;">
+    <h2 style="text-align: center;">NEW ACCOUNT</h2>
+    <form method="POST" action="/register">
+        <label>Choose Username</label>
+        <input type="text" name="username" required placeholder="e.g. Umut">
+        
+        <label>Set Password</label>
+        <input type="password" name="password" required placeholder="Strong password">
+        
+        <button type="submit" class="btn-primary">COMPLETE REGISTRATION</button>
+    </form>
+    <p style="text-align: center; margin-top: 20px; font-size: 0.9rem; color: #666;">
+        Already a member? <a href="{{ url_for('login') }}" style="color: #00ffcc;">Login</a>
+    </p>
+</div>
+{% endblock %}
